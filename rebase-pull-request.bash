@@ -53,16 +53,36 @@ function rebase_onto
     rebase --onto "$base" HEAD~1
 }
 
+function updated_commit_message
+{
+  set -e
+  local ref="$1"
+
+  local original_message=$(git log --format=%B -n 1 "$ref")
+  local author_name=$(git log --format=%an -n 1 "$ref")
+  local author_email=$(git log --format=%ae -n 1 "$ref")
+
+  local body=$(echo "$original_message" | awk '/^[A-Za-z][A-Za-z-]*:/ {exit} {print}' | sed '$d' | sed '$d')
+  local footers=$(echo "$original_message" | awk '/^[A-Za-z][A-Za-z-]*:/ {found=1} found {print}')
+
+  local updated_footers
+  if [[ $author_name != "github-actions[bot]" ]]; then
+    updated_footers=$(printf "%s\nCo-authored-by: %s <%s>" \
+      "$footers" \
+      "$author_name" \
+      "$author_email")
+  else
+    updated_footers="$footers"
+  fi
+
+  printf "%s\n\n%s" "$body" "$updated_footers"
+}
+
 function sign_head_commit_with_rest_api
 {
   set -e
 
   # https://github.com/orgs/community/discussions/50055#discussioncomment-13460641
-  ORIGINAL_MESSAGE=$(git log --format=%B -n 1)
-  ORIGINAL_AUTHOR_NAME=$(git log --format=%an -n 1)
-  ORIGINAL_AUTHOR_EMAIL=$(git log --format=%ae -n 1)
-  ORIGINAL_AUTHOR_DATE=$(git log --format=%aI -n 1)
-
   TREE_SHA=$(git log --format=%T | head -n1)
 
   # Get the parent commit hash (the base we're rebasing onto)
@@ -73,14 +93,9 @@ function sign_head_commit_with_rest_api
   git push origin "HEAD:temp-update-$TREE_SHA"
   git push origin ":temp-update-$TREE_SHA"
 
-  COMMIT_MESSAGE=$(printf "%s\n\nCo-authored-by: %s <%s>" \
-    "$ORIGINAL_MESSAGE" \
-    "$ORIGINAL_AUTHOR_NAME" \
-    "$ORIGINAL_AUTHOR_EMAIL")
-
   # Create signed commit via GitHub API with original author mentioned as Co-author
   COMMIT_RESPONSE=$(gh api -X POST repos/digiboys/sel/git/commits \
-    -f "message=$COMMIT_MESSAGE" \
+    -f "message=$(updated_commit_message HEAD)" \
     -f "tree=$TREE_SHA" \
     -f "parents[]=$PARENT_SHA" \
     --jq '.sha')
@@ -103,7 +118,6 @@ function update_pull_request_onto
     sign_head_commit_with_rest_api
     git push origin --force-with-lease --quiet
     gh pr edit --base "$base" > /dev/null
-
     echo "...✅"
   else
     echo "...failed to rebase ❌"
