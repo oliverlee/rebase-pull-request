@@ -81,6 +81,7 @@ function updated_commit_message
 function sign_head_commit_with_rest_api
 {
   set -e
+  local repo="$1"
 
   # https://github.com/orgs/community/discussions/50055#discussioncomment-13460641
   TREE_SHA=$(git log --format=%T | head -n1)
@@ -94,7 +95,7 @@ function sign_head_commit_with_rest_api
   git push origin ":temp-update-$TREE_SHA"
 
   # Create signed commit via GitHub API with original author mentioned as Co-author
-  COMMIT_RESPONSE=$(gh api -X POST repos/digiboys/sel/git/commits \
+  COMMIT_RESPONSE=$(gh api -X POST "repos/${repo}/git/commits" \
     -f "message=$(updated_commit_message HEAD)" \
     -f "tree=$TREE_SHA" \
     -f "parents[]=$PARENT_SHA" \
@@ -107,15 +108,16 @@ function sign_head_commit_with_rest_api
 
 function update_pull_request_onto
 {
-  local pr="$1"
-  local base="$2"
+  local repo="$1"
+  local pr="$2"
+  local base="$3"
 
   gh pr checkout "$pr" > /dev/null 2>&1
   echo "updating $(gh pr view $pr --json url --jq '.url')"
 
   if rebase_onto "$base"; then
     set -e
-    sign_head_commit_with_rest_api
+    sign_head_commit_with_rest_api "$repo"
     git push origin --force-with-lease --quiet
     gh pr edit --base "$base" > /dev/null
     echo "...✅"
@@ -125,8 +127,9 @@ function update_pull_request_onto
   fi
 }
 
-match="$1"
-base="$2"
+repo="$1"
+match="$2"
+base="$3"
 
 {
   case "$match" in
@@ -137,4 +140,4 @@ base="$2"
       echo "$match"
       ;;
   esac
-} | xargs -I {} bash -c 'update_pull_request_onto "$1" "$2"' _ {} "$base"
+} | xargs -I {} bash -c 'update_pull_request_onto "$1" "$2" "$3"' _ "$repo" {} "$base"

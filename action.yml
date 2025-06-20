@@ -40,5 +40,6 @@ runs:
           --quiet --force
 
         "$GITHUB_ACTION_PATH/rebase-pull-request.bash" \
+          ${{ github.repository }} \
           ${{ inputs.pull-request }} \
           ${{ inputs.base-branch }}
