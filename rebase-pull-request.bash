@@ -55,7 +55,7 @@ function rebase_onto
 
 function sign_head_commit_with_rest_api
 {
-  set -ex
+  set -e
 
   # https://github.com/orgs/community/discussions/50055#discussioncomment-13460641
   ORIGINAL_MESSAGE=$(git log --format=%B -n 1)
@@ -99,7 +99,7 @@ function update_pull_request_onto
   echo "updating $(gh pr view $pr --json url --jq '.url')"
 
   if rebase_onto "$base"; then
-    set -ex
+    set -e
     sign_head_commit_with_rest_api
     git push origin --force-with-lease --quiet
     gh pr edit --base "$base" > /dev/null
