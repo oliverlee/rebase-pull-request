@@ -1,0 +1,42 @@
+name: rebase-pull-request
+description: |
+  Rebase all stale pull requests
+
+inputs:
+  pull-request:
+    default: "stale"
+    description: |
+      Pull request to rebase. Either the pull request number or "stale".
+  base-branch:
+    default: "main"
+    description: |
+      Target branch to rebase pull requests onto.
+  checkout-ssh-key:
+    default: ""
+    description: |
+      SSH key used to fetch the repository. A deploy key can be used to allow updating protected branches.
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ssh-key: ${{ inputs.checkout-ssh-key }}
+    - name: rebase pull requests
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GIT_AUTHOR_NAME: "github-actions[bot]"
+        GIT_AUTHOR_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+        GIT_COMMITTER_NAME: "github-actions[bot]"
+        GIT_COMMITTER_EMAIL: "41898282+github-actions[bot]@users.noreply.github.com"
+      run: |
+        git fetch origin ${{ inputs.base-branch }} \
+          --quiet
+
+        git branch ${{ inputs.base-branch }} origin/${{ inputs.base-branch }} \
+          --quiet
+
+        "$GITHUB_ACTION_PATH/rebase-pull-request.bash" \
+          ${{ inputs.pull-request }} \
+          ${{ inputs.base-branch }}
