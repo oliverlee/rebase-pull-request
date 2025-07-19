@@ -53,29 +53,50 @@ function rebase_onto
     rebase --onto "$base" HEAD~1
 }
 
+function is_footer_pattern
+{
+  local line="$1"
+  [[ "$line" =~ ^[[:alnum:]][[:alnum:]-]*:[[:space:]] ]]
+}
+
+function footer_count
+{
+  local message="$1"
+
+  local lines
+  readarray -t lines <<< "$message"
+
+  local count=0
+  for ((i = ${#lines[@]} - 1; i >= 0; --i)); do
+    is_footer_pattern "${lines[i]}" && ((++count)) || break
+  done
+  echo "$count"
+}
+
 function updated_commit_message
 {
   set -e
   local ref="$1"
 
-  local original_message=$(git log --format=%B -n 1 "$ref")
+  local original_message=$(git log --format=%B -n 1 "$ref" | tac | sed '/./,$!d' | tac)
+
+  local length=$(echo "$original_message" | wc -l)
+  local footer_length=$(footer_count "$original_message")
+
+  local message=$(echo "$original_message" | head -n $((length - footer_length)))
+  local footers=$(echo "$original_message" | tail -n $footer_length)
+
   local author_name=$(git log --format=%an -n 1 "$ref")
-  local author_email=$(git log --format=%ae -n 1 "$ref")
 
-  local body=$(echo "$original_message" | awk '/^[A-Za-z][A-Za-z-]*:/ {exit} {print}' | sed '$d' | sed '$d')
-  local footers=$(echo "$original_message" | awk '/^[A-Za-z][A-Za-z-]*:/ {found=1} found {print}')
+  if [[ "$author_name" != "$(git config user.name)" ]]; then
+     local co_author="Co-authored-by: ${author_name} <$(git log --format=%ae -n 1 "$ref")>"
 
-  local updated_footers
-  if [[ $author_name != "github-actions[bot]" ]]; then
-    updated_footers=$(printf "%s\nCo-authored-by: %s <%s>" \
-      "$footers" \
-      "$author_name" \
-      "$author_email")
-  else
-    updated_footers="$footers"
-  fi
+     if ! echo "$footers" | grep -q "^${co_author}$"; then
+       footers=$(printf "%s\n%s" "$co_author" "$footers")
+     fi
+   fi
 
-  printf "%s\n\n%s" "$body" "$updated_footers"
+  printf "%s%s" "$message" "$footers"
 }
 
 function sign_head_commit_with_rest_api
