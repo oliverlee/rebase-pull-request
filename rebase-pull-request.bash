@@ -92,7 +92,7 @@ function updated_commit_message
      local co_author="Co-authored-by: ${author_name} <$(git log --format=%ae -n 1 "$ref")>"
 
      if ! echo "$footers" | grep -q "^${co_author}$"; then
-       footers=$(printf "%s\n%s" "$co_author" "$footers")
+       footers=$(printf "\n\n%s\n%s" "$co_author" "$footers")
      fi
    fi
 
